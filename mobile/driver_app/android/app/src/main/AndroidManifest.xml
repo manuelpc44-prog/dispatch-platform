@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Requerido desde Fase 10 para consumir la API REST -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- GPS en segundo plano (Fase 11 — ver docs/gps.md) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Cámara para evidencia fotográfica de entregas/incidencias (Fase 12) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!--
+      NOTA: ACCESS_BACKGROUND_LOCATION requiere, además del permiso en el manifiesto,
+      un flujo de solicitud EN DOS PASOS en tiempo de ejecución desde Android 10+
+      (primero "mientras se usa la app", luego "todo el tiempo" en un segundo diálogo
+      o llevando al usuario a Ajustes) — ver Geolocator.requestPermission() y la
+      guía oficial de Android sobre "background location access". Implementado en
+      lib/services/gps_tracking_service.dart; no pude validar el flujo real de
+      permisos en un dispositivo/emulador por la limitación de Flutter de esta fase.
+    -->
+
+    <application
+        android:label="Despacho — Chofer"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <!-- Servicio en primer plano de flutter_foreground_task (Fase 11).
+             NOTA: el nombre exacto de esta clase depende de la versión del paquete
+             (algunas versiones lo autogeneran vía su propio Gradle plugin y no
+             requieren declararlo a mano). Verificar contra la documentación de
+             flutter_foreground_task ^8.10.4 al compilar por primera vez — no se
+             pudo confirmar aquí por la limitación de Flutter de esta fase. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+    </application>
+</manifest>
