@@ -1,0 +1,79 @@
+# Configuración de Nginx como reverse proxy para producción.
+# Termina TLS, enruta /api y /ws al backend, todo lo demás al frontend,
+# y sirve /media directamente si se monta el volumen de uploads (ver nota
+# en docs/deployment.md sobre migrar esto a object storage).
+
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+    keepalive_timeout 65;
+
+    # Redirige todo el tráfico HTTP a HTTPS, salvo el desafío ACME de Let's
+    # Encrypt (certbot necesita responder por HTTP en el puerto 80 durante
+    # la emisión/renovación del certificado).
+    server {
+        listen 80;
+        server_name ${DOMAIN};
+
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    server {
+        listen 443 ssl;
+        server_name ${DOMAIN};
+
+        ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+
+        client_max_body_size 10M;  # evidencia de entregas (Fase 12) hasta 8MB + margen
+
+        # API REST
+        location /api/ {
+            proxy_pass http://backend:8000/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # WebSocket (mapa en vivo y tracking público — Fase 8)
+        location /ws/ {
+            proxy_pass http://backend:8000/ws/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 3600s;  # las conexiones WS se mantienen abiertas
+        }
+
+        # Evidencia de entregas servida por el backend (Fase 12) — en
+        # producción real, migrar a un bucket con URL firmada en vez de
+        # servir archivos locales detrás del propio backend.
+        location /media/ {
+            proxy_pass http://backend:8000/media/;
+            proxy_set_header Host $host;
+        }
+
+        # Frontend (build estático de React)
+        location / {
+            proxy_pass http://frontend:5173;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+}
