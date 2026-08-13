@@ -1,0 +1,49 @@
+# Overrides de producción sobre docker-compose.yml (sección 51, Fase 18).
+# Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Diferencias clave respecto al compose de desarrollo:
+# - Nginx al frente, terminando TLS (Let's Encrypt vía certbot).
+# - El backend/frontend ya NO exponen sus puertos directamente al host;
+#   solo Nginx escucha 80/443 públicamente.
+# - Reinicio automático en todos los servicios.
+
+services:
+  backend:
+    ports: []  # ya no se expone 8000 directo al host, solo vía Nginx
+    environment:
+      ENVIRONMENT: production
+
+  celery_worker:
+    restart: always
+
+  frontend:
+    ports: []  # ya no se expone 5173 directo al host, solo vía Nginx
+
+  nginx:
+    build: ./nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - frontend
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # Emisión inicial (correr una vez a mano, ver docs/deployment.md):
+    #   docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d $DOMAIN
+    # Renovación automática (cron en el host, ver docs/deployment.md):
+    #   docker compose run --rm certbot renew
+
+volumes:
+  certbot-etc:
+  certbot-www:
